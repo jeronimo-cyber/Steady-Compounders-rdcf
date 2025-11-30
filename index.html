@@ -366,12 +366,18 @@
             }
         }
 
-        // OPTIONEEL: Voeg een uitlog knop toe in de HTML en roep deze functie aan
-        window.handleSignOut = async function() {
-            await signOut(auth);
-            document.getElementById('authMessage').textContent = 'Uitgelogd.';
-        }
-        
+       
+// OPTIONEEL: Voeg een uitlog knop toe in de HTML en roep deze functie aan
+window.handleSignOut = async function() {
+    await signOut(auth);
+    document.getElementById('authMessage').textContent = 'Uitgelogd.';
+    // Leeg de favorieten lijst of toon een melding dat ze moeten inloggen
+    document.getElementById('favoritesList').innerHTML = `<li class="text-gray-500 dark:text-gray-400 p-2">Log in om uw favorieten te zien.</li>`;
+}
+
+
+
+ 
         // --- FIREBASE FUNCTIES (Onveranderd) ---
         
         function getFavoritesCollectionRef() {
