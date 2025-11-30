@@ -119,8 +119,110 @@
                 🌙 / 💡
             </button>
         </div>
+<div class="mb-4 p-4 border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-gray-700 rounded-lg">
+            <h2 class="text-lg font-semibold mb-3 dark:text-gray-200">Koppel Account (Opslaan op Apparaten)</h2>
 
-        <p id="user-id-display" class="mb-4 text-xs text-gray-500 dark:text-gray-400">Gebruikers ID: <span id="user-id-value">Laden...</span></p>
+            <div id="login-form">
+                <p id="user-id-display" class="mb-4 text-xs text-gray-500 dark:text-gray-400">Gebruikers ID: <span id="user-id-value" class="font-semibold">Laden...</span></p>
+
+                <div class="flex space-x-2 mb-2">
+                    <input type="email" id="authEmail" placeholder="E-mail" class="p-2 border border-gray-300 rounded-lg w-full dark:bg-gray-600 dark:border-gray-500 text-sm">
+                    <input type="password" id="authPassword" placeholder="Wachtwoord" class="p-2 border border-gray-300 rounded-lg w-full dark:bg-gray-600 dark:border-gray-500 text-sm">
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="handleSignIn()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-150 text-sm flex-grow">
+                        Inloggen
+                    </button>
+                    <button onclick="handleSignUp()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-150 text-sm flex-grow">
+                        Registreren
+                    </button>
+                </div>
+                <p id="authMessage" class="mt-2 text-sm text-center text-gray-600 dark:text-gray-300"></p>
+            </div>
+
+        </div>
+        ```
+***
+
+## 3. ✍️ JavaScript Aanpassen: Authenticatie Logica
+
+Je moet de authenticatielogica bijwerken om de knoppen (`handleSignIn` en `handleSignUp`) te implementeren en om de automatische anonieme inlog te verwijderen.
+
+**Vervang het hele bestaande `onAuthStateChanged` blok** en voeg de nieuwe functies toe.
+
+```javascript
+// IMPORTA'S: Zorg dat deze imports erin staan, anders werkt het niet!
+import { 
+    getAuth, signInAnonymously, onAuthStateChanged, 
+    createUserWithEmailAndPassword, signInWithEmailAndPassword, 
+    signOut 
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+// ... (de rest van je imports)
+
+
+// --- AUTHENTICATIE EN INITIALISATIE ---
+
+onAuthStateChanged(auth, async (user) => {
+    // Deze functie loopt NU bij ELKE PAGINA LADING, en wanneer je inlogt/uitlogt.
+    if (user) {
+        userId = user.uid;
+        document.getElementById('user-id-value').textContent = userId;
+        isAuthReady = true;
+        document.getElementById('authMessage').textContent = `Ingelogd als: ${user.email || 'Anonieme gebruiker'}`;
+        // Start luisteren naar favorieten zodra auth klaar is
+        loadFavorites();
+    } else {
+        userId = null;
+        isAuthReady = true;
+        document.getElementById('user-id-value').textContent = 'Niet ingelogd';
+        document.getElementById('authMessage').textContent = `Log in of Registreer om favorieten te bewaren op al je toestellen.`;
+        // We verwijderen hier de signInAnonymously, zodat de gebruiker expliciet moet inloggen.
+    }
+});
+
+
+// --- NIEUWE AUTH FUNCTIES ---
+
+window.handleSignUp = async function() {
+    const email = document.getElementById('authEmail').value;
+    const password = document.getElementById('authPassword').value;
+    const messageEl = document.getElementById('authMessage');
+    messageEl.textContent = 'Bezig met registreren...';
+
+    try {
+        await createUserWithEmailAndPassword(auth, email, password);
+        messageEl.textContent = 'Registratie succesvol! Automatisch ingelogd.';
+    } catch (error) {
+        // Vang fouten zoals zwak wachtwoord of e-mail al in gebruik
+        messageEl.textContent = `Fout bij registratie: ${error.message}`;
+        console.error("Fout bij registratie:", error);
+    }
+}
+
+window.handleSignIn = async function() {
+    const email = document.getElementById('authEmail').value;
+    const password = document.getElementById('authPassword').value;
+    const messageEl = document.getElementById('authMessage');
+    messageEl.textContent = 'Bezig met inloggen...';
+
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        messageEl.textContent = 'Succesvol ingelogd!';
+    } catch (error) {
+        // Vang fouten zoals ongeldige inloggegevens
+        messageEl.textContent = `Fout bij inloggen: ${error.message}`;
+        console.error("Fout bij inloggen:", error);
+    }
+}
+
+// OPTIONEEL: Voeg een uitlog knop toe in de HTML en roep deze functie aan
+window.handleSignOut = async function() {
+    await signOut(auth);
+    document.getElementById('authMessage').textContent = 'Uitgelogd.';
+    // Leeg de favorieten lijst of toon een melding dat ze moeten inloggen
+    document.getElementById('favoritesList').innerHTML = `<li class="text-gray-500 dark:text-gray-400 p-2">Log in om uw favorieten te zien.</li>`;
+}
+
 
         <!-- Huidige Koers & FCF -->
         <h2 class="text-xl font-semibold mb-4 dark:text-gray-200">Invoer Gegevens</h2>
