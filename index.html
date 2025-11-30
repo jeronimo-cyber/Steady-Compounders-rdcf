@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Steady Compounder rDCF App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <style>
+        /* Aangepaste stijlen voor de Dark Mode en elementen */
+        :root {
+            --color-primary: #0066cc;
+            --color-secondary: #e3f2fd;
+            --color-text-light: #1f2937;
+            --color-text-dark: #f9fafb;
+            --color-bg-light: #f3f4f6;
+            --color-bg-dark: #111827;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease;
+            background-color: var(--color-bg-light);
+            color: var(--color-text-light);
+        }
+
+        .dark body {
+            background-color: var(--color-bg-dark);
+            color: var(--color-text-dark);
+        }
+
+        /* Overrides voor Dark Mode consistentie */
+        .dark input, .dark select, .dark table, .dark th, .dark td, .dark button.secondary {
+            background-color: #1f2937 !important;
+            color: var(--color-text-dark);
+            border-color: #374151 !important;
+        }
+
+        .dark .result {
+             background-color: #1f2937 !important;
+        }
+
+        /* Aangepaste Tailwind classes voor de 'Gauge' */
+        .undervalued { color: #10b981; } /* Groen */
+        .overvalued { color: #ef4444; }   /* Rood */
+        .fair { color: #f59e0b; }         /* Geel/Oranje */
+
+        .input-group {
+            margin-bottom: 1.5rem;
+        }
+
+        /* Slider aanpassing */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 10px;
+            background: #d1d5db;
+            border-radius: 5px;
+            outline: none;
+            margin-top: 10px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--color-primary);
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--color-primary);
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        /* Custom Modal Styling (Hidden by default) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: none; /* Standaard verborgen */
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+        .dark .modal-content {
+            background-color: #1f2937;
+            color: var(--color-text-dark);
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <div class="max-w-3xl mx-auto bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-xl shadow-2xl transition duration-300">
+        
+        <!-- Header & Dark Mode Toggle -->
+        <div class="flex justify-between items-center mb-6 border-b pb-4 border-gray-200 dark:border-gray-700">
+            <h1 class="text-xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-100 leading-tight">
+                Steady Compounder rDCF
+            </h1>
+            <button onclick="document.body.classList.toggle('dark')" 
+                    class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 p-2 rounded-full text-sm font-semibold transition duration-150 ease-in-out hover:bg-gray-300 dark:hover:bg-gray-600">
+                🌙 / 💡
+            </button>
+        </div>
+
+        <p id="user-id-display" class="mb-4 text-xs text-gray-500 dark:text-gray-400">Gebruikers ID: <span id="user-id-value">Laden...</span></p>
+
+        <!-- Huidige Koers & FCF -->
+        <h2 class="text-xl font-semibold mb-4 dark:text-gray-200">Invoer Gegevens</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+             <div class="input-group">
+                <label for="ticker" class="block text-sm font-medium mb-1 dark:text-gray-300">Ticker (MSFT, AAPL, etc.)</label>
+                <input type="text" id="ticker" value="MSFT"
+                       class="p-3 border border-gray-300 rounded-lg w-full dark:bg-gray-700 dark:border-gray-600 uppercase">
+            </div>
+            <div class="input-group">
+                <label for="prijs" class="block text-sm font-medium mb-1 dark:text-gray-300">Huidige Aandeelkoers ($)</label>
+                <input type="number" id="prijs" value="320.50" step="0.01"
+                       class="p-3 border border-gray-300 rounded-lg w-full dark:bg-gray-700 dark:border-gray-600">
+            </div>
+            <div class="input-group">
+                <label for="fcf" class="block text-sm font-medium mb-1 dark:text-gray-300">Optimized FCF/Share ($)</label>
+                <input type="number" id="fcf" value="6.50" step="0.01"
+                       class="p-3 border border-gray-300 rounded-lg w-full dark:bg-gray-700 dark:border-gray-600">
+            </div>
+        </div>
+
+        <hr class="my-6 border-gray-200 dark:border-gray-700">
+
+        <!-- DCF Inputs -->
+        <h2 class="text-xl font-semibold mb-4 dark:text-gray-200">🧮 DCF Aannames</h2>
+
+        <!-- Growth Rate Slider -->
+        <div class="input-group">
+            <label for="growth" class="block text-sm font-medium mb-1 dark:text-gray-300">
+                Year 1–15 Growth Rate (%) → Sleep tot Intrinsic Value = Huidige Koers
+            </label>
+            <div class="flex items-center space-x-4">
+                <input type="range" class="slider flex-grow" id="growth" min="0" max="35" step="0.1" value="16.5">
+                <span id="growthVal" class="text-2xl font-bold w-20 text-right dark:text-gray-100">16.5%</span>
+            </div>
+        </div>
+
+        <!-- Discount & Terminal Rate - Nu met Dropdowns -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="input-group">
+                <label for="discount" class="block text-sm font-medium mb-1 dark:text-gray-300">Discount Rate (WACC) (%)</label>
+                <select id="discount" class="p-3 border border-gray-300 rounded-lg w-full dark:bg-gray-700 dark:border-gray-600"></select>
+            </div>
+            <div class="input-group">
+                <label for="terminal" class="block text-sm font-medium mb-1 dark:text-gray-300">Terminal Growth Rate (% – max 5%)</label>
+                <select id="terminal" class="p-3 border border-gray-300 rounded-lg w-full dark:bg-gray-700 dark:border-gray-600"></select>
+            </div>
+        </div>
+
+        <!-- RESULTAAT SECTIE -->
+        <div class="result bg-blue-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl shadow-lg p-6 my-8" id="uitkomst">
+            Vul geldige waarden in om te beginnen.
+        </div>
+
+        <!-- SAMENVATTINGSTABEL -->
+        <h3 class="text-lg font-semibold mb-3 dark:text-gray-200">Samenvatting</h3>
+        <table id="samenvatting" class="min-w-full rounded-xl overflow-hidden text-sm mb-8">
+            <thead class="bg-blue-600 text-white">
+                <tr><th>Parameter</th><th>Waarde</th></tr>
+            </thead>
+            <tbody class="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                <!-- Data wordt hier ingevoegd -->
+            </tbody>
+        </table>
+
+        <hr class="my-6 border-gray-200 dark:border-gray-700">
+
+        <!-- FAVORITES SECTION -->
+        <h2 class="text-xl font-semibold mb-4 dark:text-gray-200">⭐ Opgeslagen Favorieten (Laden & Verwijderen)</h2>
+
+        <!-- Save input and button -->
+        <div class="input-group flex space-x-2">
+            <input type="text" id="favoriteName" placeholder="Naam voor deze waardering (bv. 'Conservatief' of 'Bear Case')"
+                   class="flex-grow p-3 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500">
+            <button onclick="saveFavorite()" id="saveButton"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out w-auto flex-shrink-0 disabled:opacity-50">
+                Opslaan
+            </button>
+        </div>
+
+        <!-- Saved Favorites List -->
+        <div class="mt-4">
+            <ul id="favoritesList" class="space-y-2">
+                <li id="favorites-loading" class="text-gray-500 dark:text-gray-400">Laden van favorieten...</li>
+            </ul>
+        </div>
+
+    </div>
+
+    <!-- CUSTOM DELETE MODAL (NU MET JA/NEE KNOPPEN) -->
+    <div id="deleteModalOverlay" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold mb-4 text-red-600 dark:text-red-400">🚨 Bevestig Verwijdering</h3>
+            <p class="mb-6 dark:text-gray-300">Wil je de favoriet "<strong id="modal-fav-name" class="font-semibold"></strong>" permanent verwijderen?</p>
+            
+            <div class="flex justify-end space-x-3">
+                <button onclick="hideDeleteModal()" 
+                        class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-150">
+                    Annuleren
+                </button>
+                <!-- Deze knop roept nu direct confirmDelete() aan -->
+                <button onclick="confirmDelete()" 
+                        class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-150">
+                    Ja, Verwijder
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- EINDE CUSTOM DELETE MODAL -->
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, deleteDoc, onSnapshot, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Global Variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        let userId = null;
+        let isAuthReady = false;
+        let favToDelete = { id: null, name: null }; // Global state voor de te verwijderen favoriet
+
+        // DOM Elementen voor de modal (verwijderde confirmInput/confirmButton)
+        const modalOverlay = document.getElementById('deleteModalOverlay');
+        const modalNameDisplay = document.getElementById('modal-fav-name');
+
+
+        /**
+         * Genereert opties voor dropdowns op basis van een bereik.
+         * @param {string} id - De ID van het select-element.
+         * @param {number} min - De minimale waarde.
+         * @param {number} max - De maximale waarde.
+         * @param {number} step - De stapgrootte.
+         * @param {number} defaultValue - De standaard geselecteerde waarde.
+         */
+        function generateDropdownOptions(id, min, max, step, defaultValue) {
+            const select = document.getElementById(id);
+            if (!select) return;
+            select.innerHTML = ''; // Leeg de dropdown
+
+            for (let val = min; val <= max; val += step) {
+                const option = document.createElement('option');
+                const formattedVal = val.toFixed(1);
+                option.value = formattedVal;
+                option.textContent = `${formattedVal}%`;
+                if (parseFloat(formattedVal) === defaultValue) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            }
+        }
+
+        // --- Initialisatie van Dropdowns ---
+        // WACC: 7.0% tot 12.0%, stap 0.5% (standaard 8.5%)
+        generateDropdownOptions('discount', 7.0, 12.0, 0.5, 8.5);
+        // Terminal Growth: 0.0% tot 5.0%, stap 0.5% (standaard 5.0%)
+        generateDropdownOptions('terminal', 0.0, 5.0, 0.5, 5.0);
+
+
+        // Utility: Get current input values
+        const getCurrentInputs = () => ({
+            ticker: document.getElementById('ticker').value.trim().toUpperCase() || 'N/A',
+            prijs: parseFloat(document.getElementById('prijs').value) || 0,
+            fcf: parseFloat(document.getElementById('fcf').value) || 0,
+            growth: parseFloat(document.getElementById('growth').value) || 0,
+            discount: parseFloat(document.getElementById('discount').value) || 0,
+            terminal: parseFloat(document.getElementById('terminal').value) || 0,
+        });
+
+        // --- AUTHENTICATIE EN INITIALISATIE ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+                document.getElementById('user-id-value').textContent = userId;
+                isAuthReady = true;
+                // Start luisteren naar favorieten zodra auth klaar is
+                loadFavorites();
+            } else {
+                // Eerste aanmelding of anonieme login als token ontbreekt
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Fout bij inloggen:", error);
+                    document.getElementById('user-id-value').textContent = "ERROR";
+                    isAuthReady = true; 
+                    document.getElementById('favorites-loading').textContent = "Kon favorieten niet laden (inlogfout).";
+                }
+            }
+        });
+
+        // --- FIREBASE FUNCTIES ---
+
+        function getFavoritesCollectionRef() {
+            if (!userId) {
+                console.error("Gebruikers-ID niet beschikbaar.");
+                return null;
+            }
+            // Private collection path: /artifacts/{appId}/users/{userId}/rdcf_favorites
+            return collection(db, `artifacts/${appId}/users/${userId}/rdcf_favorites`);
+        }
+
+        window.saveFavorite = async function() {
+            if (!isAuthReady || !userId) {
+                console.error("Authenticatie nog niet voltooid. Kon niet opslaan.");
+                document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Authenticatie nog niet voltooid. Probeer het over een moment opnieuw.</div>`;
+                return;
+            }
+            
+            const favoriteName = document.getElementById('favoriteName').value.trim();
+            if (!favoriteName) {
+                console.error("Geef de favoriet een naam.");
+                document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Geef de favoriet een naam.</div>`;
+                return;
+            }
+
+            const inputs = getCurrentInputs();
+            if (inputs.prijs <= 0 || inputs.fcf <= 0) {
+                 console.error("Kan niet opslaan: Huidige Koers en FCF per aandeel moeten groter zijn dan 0.");
+                 document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Kan niet opslaan: Huidige Koers en FCF per aandeel moeten groter zijn dan 0.</div>`;
+                 return;
+            }
+
+            const payload = {
+                name: favoriteName,
+                ...inputs,
+                createdAt: serverTimestamp()
+            };
+
+            const saveButton = document.getElementById('saveButton');
+            saveButton.disabled = true;
+            saveButton.textContent = 'Opslaan...';
+
+            try {
+                const favoritesRef = getFavoritesCollectionRef();
+                await addDoc(favoritesRef, payload);
+                document.getElementById('favoriteName').value = '';
+                // Geef UI feedback
+                document.getElementById('uitkomst').innerHTML = `<p class="mt-4 text-sm text-green-600 dark:text-green-400">Favoriet '${inputs.ticker} - ${favoriteName}' succesvol opgeslagen!</p>`;
+            } catch (error) {
+                console.error("Fout bij opslaan favoriet:", error);
+                document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Fout bij opslaan: ${error.message}</div>`;
+            } finally {
+                saveButton.disabled = false;
+                saveButton.textContent = 'Opslaan';
+            }
+        }
+
+        function loadFavorites() {
+            const favoritesRef = getFavoritesCollectionRef();
+            if (!favoritesRef) return;
+
+            // Real-time listener op de favorieten collectie
+            onSnapshot(favoritesRef, (snapshot) => {
+                const favorites = [];
+                snapshot.forEach(doc => {
+                    favorites.push({ id: doc.id, ...doc.data() });
+                });
+                
+                // Sorteer op creatiedatum, nieuwste eerst
+                favorites.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+                renderFavorites(favorites);
+            }, (error) => {
+                console.error("Fout bij real-time laden van favorieten:", error);
+                document.getElementById('favoritesList').innerHTML = `<li class="text-red-500">Fout bij laden: ${error.message}</li>`;
+            });
+        }
+
+        function renderFavorites(favorites) {
+            const listElement = document.getElementById('favoritesList');
+            listElement.innerHTML = ''; // Leeg de lijst
+
+            if (favorites.length === 0) {
+                listElement.innerHTML = `<li class="text-gray-500 dark:text-gray-400 p-2">Nog geen opgeslagen favorieten.</li>`;
+                return;
+            }
+
+            favorites.forEach(fav => {
+                const listItem = document.createElement('li');
+                listItem.className = 'flex justify-between items-center bg-gray-50 dark:bg-gray-700 p-3 rounded-lg shadow-sm';
+                
+                const dateStr = fav.createdAt ? new Date(fav.createdAt.seconds * 1000).toLocaleDateString('nl-NL') : 'Datum onbekend';
+                const tickerDisplay = fav.ticker && fav.ticker !== 'N/A' ? `${fav.ticker} - ` : '';
+                
+                listItem.innerHTML = `
+                    <div class="flex-grow">
+                        <span class="font-semibold dark:text-gray-100">${tickerDisplay}${fav.name}</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400 ml-3">($${fav.prijs.toFixed(2)} @ ${fav.growth.toFixed(1)}% | Opgeslagen: ${dateStr})</span>
+                    </div>
+                    <div class="flex space-x-2 ml-4">
+                        <button class="bg-blue-500 hover:bg-blue-600 text-white text-sm px-3 py-1 rounded-lg transition duration-150" 
+                                data-id="${fav.id}" data-action="load">Laden</button>
+                        <button class="bg-red-500 hover:bg-red-600 text-white text-sm px-3 py-1 rounded-lg transition duration-150" 
+                                data-id="${fav.id}" data-action="delete">X</button>
+                    </div>
+                `;
+
+                listItem.querySelector('[data-action="load"]').addEventListener('click', () => applyFavorite(fav));
+                // Verwijder button roept nu de nieuwe modal-functie aan
+                listItem.querySelector('[data-action="delete"]').addEventListener('click', () => showDeleteModal(fav.id, fav.name));
+                
+                listElement.appendChild(listItem);
+            });
+        }
+
+        window.applyFavorite = function(fav) {
+            // Pas de waarden toe op de input/select-velden
+            document.getElementById('ticker').value = fav.ticker || ''; // Laad de ticker
+            document.getElementById('prijs').value = fav.prijs.toFixed(2);
+            document.getElementById('fcf').value = fav.fcf.toFixed(2);
+            document.getElementById('growth').value = fav.growth.toFixed(1);
+            
+            // Zet de select-waarden. De waarden in fav.discount/terminal zijn nummers, maar de select.value is string.
+            // Zorg dat de waarde overeenkomt met een van de opties, afgerond op 1 decimaal.
+            document.getElementById('discount').value = fav.discount.toFixed(1);
+            document.getElementById('terminal').value = fav.terminal.toFixed(1);
+            
+            // Trigger de berekening
+            bereken();
+            // Geef feedback
+            document.getElementById('uitkomst').innerHTML += `<p class="mt-4 text-sm text-blue-600 dark:text-blue-400">Waardering '${fav.ticker || ''} - ${fav.name}' geladen.</p>`;
+        }
+        
+        // NIEUWE MODAL FUNCTIES
+
+        window.showDeleteModal = function(id, name) {
+            // Sla de te verwijderen favoriet op
+            favToDelete.id = id;
+            favToDelete.name = name;
+            
+            // Werk de naam in de modal bij
+            modalNameDisplay.textContent = name;
+            
+            // Toon de modal
+            modalOverlay.style.display = 'flex';
+        }
+
+        // De hide functie sluit de modal
+        window.hideDeleteModal = function() {
+            modalOverlay.style.display = 'none';
+        }
+
+
+        // De confirm functie voert de delete uit (geen invoercontrole meer nodig)
+        window.confirmDelete = async function() {
+            // 1. CAPTURE the ID and Name locally FIRST
+            const id = favToDelete.id;
+            const name = favToDelete.name;
+
+            hideDeleteModal(); // Sluit de modal
+
+            // 2. CHECK op geldige data
+            if (!id || !name) {
+                // Deze foutmelding zou nu zeer zeldzaam moeten zijn
+                document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Fout: Geen favoriet geselecteerd voor verwijdering.</div>`;
+                return;
+            }
+
+            try {
+                const favoritesRef = getFavoritesCollectionRef();
+                await deleteDoc(doc(favoritesRef, id));
+                // Geef duidelijke succes feedback in de uitkomst sectie
+                document.getElementById('uitkomst').innerHTML = `<div class="text-green-600 dark:text-green-400">✅ Favoriet '${name}' succesvol verwijderd.</div>`;
+                // onSnapshot zal de UI automatisch bijwerken
+            } catch (error) {
+                console.error("Fout bij verwijderen favoriet:", error);
+                document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Fout bij verwijderen: ${error.message}</div>`;
+            } finally {
+                // 3. Reset de globale state (na succes of falen)
+                favToDelete.id = null;
+                favToDelete.name = null;
+            }
+        }
+
+
+        // --- DCF BEREKENINGS LOGICA ---
+        // Functie voor de Reverse DCF berekening (buiten module zodat HTML event listeners het kunnen gebruiken)
+        window.bereken = function() {
+            // Waarden van de dropdowns worden correct geparsed als float
+            const price = parseFloat(document.getElementById('prijs').value) || 0;
+            const fcfShare = parseFloat(document.getElementById('fcf').value) || 0;
+            const growth = parseFloat(document.getElementById('growth').value) / 100;
+            const discount = parseFloat(document.getElementById('discount').value) / 100;
+            const terminal = parseFloat(document.getElementById('terminal').value) / 100;
+            const ticker = document.getElementById('ticker').value.trim().toUpperCase() || 'N/A';
+
+            // Foutcontrole
+            if (price <= 0 || fcfShare <= 0) {
+                document.getElementById('uitkomst').innerHTML = "Voer de Huidige Koers en Optimized FCF/Share in.";
+                document.getElementById('samenvatting').querySelector('tbody').innerHTML = '';
+                return;
+            }
+            if (discount <= terminal + 0.001) {
+                 document.getElementById('uitkomst').innerHTML = "Fout: Discount Rate moet hoger zijn dan Terminal Growth Rate.";
+                 document.getElementById('samenvatting').querySelector('tbody').innerHTML = '';
+                 return;
+            }
+
+            document.getElementById('growthVal').textContent = (growth * 100).toFixed(1) + '%';
+            document.getElementById('ticker').value = ticker; // Zorgt ervoor dat de input in hoofdletters blijft
+
+            let pv = 0;
+            let fcf15 = 0;
+
+            // DCF Berekening over 15 jaar
+            for (let y = 1; y <= 15; y++) {
+                const fcfY = fcfShare * Math.pow(1 + growth, y);
+                if (y === 15) fcf15 = fcfY;
+                pv += fcfY / Math.pow(1 + discount, y);
+            }
+
+            // Terminal Value berekening (Perpetual Growth Model)
+            const TV = fcf15 * (1 + terminal) / (discount - terminal);
+            const pvTV = TV / Math.pow(1 + discount, 15);
+
+            const intrinsic = pv + pvTV; // Intrinsieke waarde per aandeel
+            const ig = growth * 100;
+            
+            // Beoordeling op basis van Implied Growth
+            let score = "";
+            let kleur = "";
+            if (ig <= 4) { score = "1 – Much Too Optimistic / Strongly Overvalued"; kleur = "overvalued"; }
+            else if (ig <= 7) { score = "2 – Too Optimistic / Overvalued"; kleur = "overvalued"; }
+            else if (ig <= 10) { score = "3 – Slightly Optimistic"; kleur = "fair"; }
+            else if (ig <= 13) { score = "4 – Reasonable / Fairly Valued"; kleur = "fair"; }
+            else if (ig <= 16) { score = "5 – Slightly Pessimistic"; kleur = "fair"; }
+            else if (ig <= 20) { score = "6 – Too Pessimistic / Undervalued"; kleur = "undervalued"; }
+            else { score = "7 – Deeply Undervalued"; kleur = "undervalued"; }
+
+            const upside = ((intrinsic - price) / price * 100).toFixed(1);
+
+            // Resultaten weergeven
+            document.getElementById('uitkomst').innerHTML = `
+                <div class="text-lg font-medium mb-2">${ticker} Intrinsic Value (Fair Price):</div>
+                <strong class="text-5xl font-extrabold">$${intrinsic.toFixed(2)}</strong><br>
+                <div class="gauge ${kleur} text-3xl font-bold mt-4">${score}</div>
+                <div class="mt-4 text-xl">Upside/Downside: <strong class="${upside > 0 ? 'text-green-600' : 'text-red-600'}">${upside > 0 ? '+' : ''}${upside}%</strong></div>
+                <div class="mt-2 text-md text-gray-600 dark:text-gray-400">Implied 15-yr FCF Growth Rate: <strong>${ig.toFixed(1)}%</strong></div>
+            `;
+
+            // Samenvattingstabel updaten
+            document.getElementById('samenvatting').querySelector('tbody').innerHTML = `
+                <tr><td class="px-6 py-3">Ticker</td><td class="px-6 py-3 font-semibold">${ticker}</td></tr>
+                <tr><td class="px-6 py-3">Huidige koers</td><td class="px-6 py-3 font-semibold">$${price.toFixed(2)}</td></tr>
+                <tr><td class="px-6 py-3">Intrinsic Value</td><td class="px-6 py-3 font-semibold">$${intrinsic.toFixed(2)}</td></tr>
+                <tr><td class="px-6 py-3">Upside/Downside</td><td class="px-6 py-3 font-semibold ${upside > 0 ? 'text-green-600' : 'text-red-600'}">${upside > 0 ? '+' : ''}${upside}%</td></tr>
+                <tr><td class="px-6 py-3">Implied Growth (15 jaar)</td><td class="px-6 py-3">${ig.toFixed(1)}%</td></tr>
+                <tr><td class="px-6 py-3">Discount Rate (WACC)</td><td class="px-6 py-3">${(discount * 100).toFixed(1)}%</td></tr>
+                <tr><td class="px-6 py-3">Terminal Growth</td><td class="px-6 py-3">${(terminal * 100).toFixed(1)}%</td></tr>
+                <tr><td class="px-6 py-3">Optimized FCF/Share</td><td class="px-6 py-3">$${fcfShare.toFixed(2)}</td></tr>
+            `;
+        }
+
+
+        // Live update bij elke verandering van de invoervelden
+        const inputIds = ['ticker', 'prijs', 'fcf', 'growth', 'discount', 'terminal'];
+        inputIds.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('input', window.bereken);
+            } else {
+                console.error(`Fout: Element met ID ${id} niet gevonden. Kan geen event listener toevoegen.`);
+            }
+        });
+
+        // Start meteen bij het laden van de pagina
+        window.bereken();
+    </script>
+</body>
+</html>
