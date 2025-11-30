@@ -361,24 +361,16 @@ window.handleSignOut = async function() {
         
         let userId = null;
         let isAuthReady = false;
-        let favToDelete = { id: null, name: null }; // Global state voor de te verwijderen favoriet
+        let favToDelete = { id: null, name: null }; 
 
-        // DOM Elementen voor de modal (verwijderde confirmInput/confirmButton)
         const modalOverlay = document.getElementById('deleteModalOverlay');
         const modalNameDisplay = document.getElementById('modal-fav-name');
 
-        /**
-         * Genereert opties voor dropdowns op basis van een bereik.
-         * @param {string} id - De ID van het select-element.
-         * @param {number} min - De minimale waarde.
-         * @param {number} max - De maximale waarde.
-         * @param {number} step - De stapgrootte.
-         * @param {number} defaultValue - De standaard geselecteerde waarde.
-         */
+        
         function generateDropdownOptions(id, min, max, step, defaultValue) {
             const select = document.getElementById(id);
             if (!select) return;
-            select.innerHTML = ''; // Leeg de dropdown
+            select.innerHTML = '';
             for (let val = min; val <= max; val += step) {
                 const option = document.createElement('option');
                 const formattedVal = val.toFixed(1);
@@ -391,13 +383,9 @@ window.handleSignOut = async function() {
             }
         }
 
-        // --- Initialisatie van Dropdowns ---
-        // WACC: 7.0% tot 12.0%, stap 0.5% (standaard 8.5%)
         generateDropdownOptions('discount', 7.0, 12.0, 0.5, 8.5);
-        // Terminal Growth: 0.0% tot 5.0%, stap 0.5% (standaard 5.0%)
         generateDropdownOptions('terminal', 0.0, 5.0, 0.5, 5.0);
 
-        // Utility: Get current input values
         const getCurrentInputs = () => ({
             ticker: document.getElementById('ticker').value.trim().toUpperCase() || 'N/A',
             prijs: parseFloat(document.getElementById('prijs').value) || 0,
@@ -407,44 +395,78 @@ window.handleSignOut = async function() {
             terminal: parseFloat(document.getElementById('terminal').value) || 0,
         });
 
-        // --- AUTHENTICATIE EN INITIALISATIE ---
+        // --- AUTHENTICATIE EN INITIALISATIE (GECORRIGEERD VOOR EMAIL/PASS) ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 userId = user.uid;
                 document.getElementById('user-id-value').textContent = userId;
                 isAuthReady = true;
-                // Start luisteren naar favorieten zodra auth klaar is
+                document.getElementById('authMessage').textContent = `Ingelogd als: ${user.email || 'Anonieme gebruiker'}`;
                 loadFavorites();
             } else {
-                // Eerste aanmelding of anonieme login
-                try {
-                    await signInAnonymously(auth);
-                } catch (error) {
-                    console.error("Fout bij inloggen:", error);
-                    document.getElementById('user-id-value').textContent = "ERROR";
-                    isAuthReady = true; 
-                     document.getElementById('favorites-loading').textContent = "Kon favorieten niet laden (inlogfout).";
-                }
+                userId = null;
+                isAuthReady = true;
+                document.getElementById('user-id-value').textContent = 'Niet ingelogd';
+                document.getElementById('authMessage').textContent = `Log in of Registreer om favorieten te bewaren op al je toestellen.`;
+                document.getElementById('favoritesList').innerHTML = `<li class="text-gray-500 dark:text-gray-400 p-2">Log in om uw favorieten te zien.</li>`; // Leeg de lijst
             }
         });
 
-        // --- FIREBASE FUNCTIES ---
+        // --- NIEUWE AUTH FUNCTIES ---
+
+        window.handleSignUp = async function() {
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPassword').value;
+            const messageEl = document.getElementById('authMessage');
+            messageEl.textContent = 'Bezig met registreren...';
+
+            try {
+                await createUserWithEmailAndPassword(auth, email, password);
+                messageEl.textContent = 'Registratie succesvol! Automatisch ingelogd.';
+            } catch (error) {
+                messageEl.textContent = `Fout bij registratie: ${error.message}`;
+                console.error("Fout bij registratie:", error);
+            }
+        }
+
+        window.handleSignIn = async function() {
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPassword').value;
+            const messageEl = document.getElementById('authMessage');
+            messageEl.textContent = 'Bezig met inloggen...';
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                messageEl.textContent = 'Succesvol ingelogd!';
+            } catch (error) {
+                messageEl.textContent = `Fout bij inloggen: ${error.message}`;
+                console.error("Fout bij inloggen:", error);
+            }
+        }
+
+        // OPTIONEEL: Voeg een uitlog knop toe in de HTML en roep deze functie aan
+        window.handleSignOut = async function() {
+            await signOut(auth);
+            document.getElementById('authMessage').textContent = 'Uitgelogd.';
+        }
+        
+        // --- FIREBASE FUNCTIES (Onveranderd) ---
+        
         function getFavoritesCollectionRef() {
             if (!userId) {
                 console.error("Gebruikers-ID niet beschikbaar.");
                 return null;
             }
-            // Private collection path: /artifacts/{appId}/users/{userId}/rdcf_favorites
             return collection(db, `artifacts/${appId}/users/${userId}/rdcf_favorites`);
         }
 
         window.saveFavorite = async function() {
             if (!isAuthReady || !userId) {
-                console.error("Authenticatie nog niet voltooid. Kon niet opslaan.");
-                document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Authenticatie nog niet voltooid. Probeer het over een moment opnieuw.</div>`;
+                console.error("Authenticatie nog niet voltooid of niet ingelogd.");
+                document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Authenticatie nog niet voltooid of niet ingelogd. Log in om op te slaan.</div>`;
                 return;
             }
-
+            
             const favoriteName = document.getElementById('favoriteName').value.trim();
             if (!favoriteName) {
                 console.error("Geef de favoriet een naam.");
@@ -471,10 +493,8 @@ window.handleSignOut = async function() {
 
             try {
                 const favoritesRef = getFavoritesCollectionRef();
-                // Gebruik addDoc (geeft een willekeurige ID) in plaats van set/doc(name) om duplicaten te voorkomen
                 await addDoc(favoritesRef, payload);
                 document.getElementById('favoriteName').value = '';
-                // Geef UI feedback
                 document.getElementById('uitkomst').innerHTML = `<p class="mt-4 text-sm text-green-600 dark:text-green-400">Favoriet '${inputs.ticker} - ${favoriteName}' succesvol opgeslagen!</p>`;
             } catch (error) {
                 console.error("Fout bij opslaan favoriet:", error);
@@ -487,16 +507,17 @@ window.handleSignOut = async function() {
 
         function loadFavorites() {
             const favoritesRef = getFavoritesCollectionRef();
-            if (!favoritesRef) return;
+            if (!favoritesRef) {
+                document.getElementById('favoritesList').innerHTML = `<li class="text-red-500">Authenticatie of gebruikers-ID ontbreekt.</li>`;
+                return;
+            }
 
-            // Real-time listener op de favorieten collectie
             onSnapshot(favoritesRef, (snapshot) => {
                 const favorites = [];
                 snapshot.forEach(doc => {
                     favorites.push({ id: doc.id, ...doc.data() });
                 });
 
-                // Sorteer op creatiedatum, nieuwste eerst
                 favorites.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 
                 renderFavorites(favorites);
@@ -508,7 +529,7 @@ window.handleSignOut = async function() {
 
         function renderFavorites(favorites) {
             const listElement = document.getElementById('favoritesList');
-            listElement.innerHTML = ''; // Leeg de lijst
+            listElement.innerHTML = '';
             if (favorites.length === 0) {
                 listElement.innerHTML = `<li class="text-gray-500 dark:text-gray-400 p-2">Nog geen opgeslagen favorieten.</li>`;
                 return;
@@ -535,7 +556,6 @@ window.handleSignOut = async function() {
                 `;
 
                 listItem.querySelector('[data-action="load"]').addEventListener('click', () => applyFavorite(fav));
-                // Verwijder button roept nu de nieuwe modal-functie aan
                 listItem.querySelector('[data-action="delete"]').addEventListener('click', () => showDeleteModal(fav.id, fav.name));
 
                 listElement.appendChild(listItem);
@@ -543,51 +563,34 @@ window.handleSignOut = async function() {
         }
 
         window.applyFavorite = function(fav) {
-            // Pas de waarden toe op de input/select-velden
-            document.getElementById('ticker').value = fav.ticker || ''; // Laad de ticker
+            document.getElementById('ticker').value = fav.ticker || ''; 
             document.getElementById('prijs').value = fav.prijs.toFixed(2);
             document.getElementById('fcf').value = fav.fcf.toFixed(2);
             document.getElementById('growth').value = fav.growth.toFixed(1);
-
-            // Zet de select-waarden. De waarden in fav.discount/terminal zijn nummers, maar de select.value is string.
-            // Zorg dat de waarde overeenkomt met een van de opties, afgerond op 1 decimaal.
             document.getElementById('discount').value = fav.discount.toFixed(1);
             document.getElementById('terminal').value = fav.terminal.toFixed(1);
 
-            // Trigger de berekening
             bereken();
-            // Geef feedback
             document.getElementById('uitkomst').innerHTML += `<p class="mt-4 text-sm text-blue-600 dark:text-blue-400">Waardering '${fav.ticker || ''} - ${fav.name}' geladen.</p>`;
         }
 
-        // NIEUWE MODAL FUNCTIES
         window.showDeleteModal = function(id, name) {
-            // Sla de te verwijderen favoriet op
             favToDelete.id = id;
             favToDelete.name = name;
-
-            // Werk de naam in de modal bij
             modalNameDisplay.textContent = name;
-
-            // Toon de modal
             modalOverlay.style.display = 'flex';
         }
 
-        // De hide functie sluit de modal
         window.hideDeleteModal = function() {
             modalOverlay.style.display = 'none';
         }
 
-        // De confirm functie voert de delete uit (geen invoercontrole meer nodig)
         window.confirmDelete = async function() {
-            // 1. CAPTURE the ID and Name locally FIRST
             const id = favToDelete.id;
             const name = favToDelete.name;
 
-            hideDeleteModal(); // Sluit de modal
-            // 2. CHECK op geldige data
+            hideDeleteModal();
             if (!id || !name) {
-                // Deze foutmelding zou nu zeer zeldzaam moeten zijn
                 document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Fout: Geen favoriet geselecteerd voor verwijdering.</div>`;
                 return;
             }
@@ -595,23 +598,19 @@ window.handleSignOut = async function() {
             try {
                 const favoritesRef = getFavoritesCollectionRef();
                 await deleteDoc(doc(favoritesRef, id));
-                // Geef duidelijke succes feedback in de uitkomst sectie
                 document.getElementById('uitkomst').innerHTML = `<div class="text-green-600 dark:text-green-400">✅ Favoriet '${name}' succesvol verwijderd.</div>`;
-                // onSnapshot zal de UI automatisch bijwerken
             } catch (error) {
                 console.error("Fout bij verwijderen favoriet:", error);
                 document.getElementById('uitkomst').innerHTML = `<div class="text-red-500">Fout bij verwijderen: ${error.message}</div>`;
             } finally {
-                // 3. Reset de globale state (na succes of falen)
                 favToDelete.id = null;
                 favToDelete.name = null;
             }
         }
 
-        // --- DCF BEREKENINGS LOGICA ---
-        // Functie voor de Reverse DCF berekening (buiten module zodat HTML event listeners het kunnen gebruiken)
+        // --- DCF BEREKENINGS LOGICA (Onveranderd) ---
+
         window.bereken = function() {
-            // Waarden van de dropdowns worden correct geparsed als float
             const price = parseFloat(document.getElementById('prijs').value) || 0;
             const fcfShare = parseFloat(document.getElementById('fcf').value) || 0;
             const growth = parseFloat(document.getElementById('growth').value) / 100;
@@ -619,7 +618,6 @@ window.handleSignOut = async function() {
             const terminal = parseFloat(document.getElementById('terminal').value) / 100;
             const ticker = document.getElementById('ticker').value.trim().toUpperCase() || 'N/A';
 
-            // Foutcontrole
             if (price <= 0 || fcfShare <= 0) {
                 document.getElementById('uitkomst').innerHTML = "Voer de Huidige Koers en Optimized FCF/Share in.";
                 document.getElementById('samenvatting').querySelector('tbody').innerHTML = '';
@@ -632,29 +630,25 @@ window.handleSignOut = async function() {
             }
 
             document.getElementById('growthVal').textContent = (growth * 100).toFixed(1) + '%';
-            document.getElementById('ticker').value = ticker; // Zorgt ervoor dat de input in hoofdletters blijft
+            document.getElementById('ticker').value = ticker;
             let pv = 0;
             let fcf15 = 0;
 
-            // DCF Berekening over 15 jaar
             for (let y = 1; y <= 15; y++) {
                 const fcfY = fcfShare * Math.pow(1 + growth, y);
                 if (y === 15) fcf15 = fcfY;
                 pv += fcfY / Math.pow(1 + discount, y);
             }
 
-            // Terminal Value berekening (Perpetual Growth Model)
             const TV = fcf15 * (1 + terminal) / (discount - terminal);
             const pvTV = TV / Math.pow(1 + discount, 15);
 
-            const intrinsic = pv + pvTV; // Intrinsieke waarde per aandeel
+            const intrinsic = pv + pvTV;
             const ig = growth * 100;
 
-            // FIX #2: Gecorrigeerde Beoordelingslogica
             let score = "";
             let kleur = "";
 
-            // Hoge Geïmpliceerde Groei = Markt is Optimistisch = Overvalued
             if (ig >= 20.1) { score = "1 – Too Optimistic / Strongly Overvalued"; kleur = "overvalued"; }
             else if (ig >= 16.1) { score = "2 – Too Optimistic / Overvalued"; kleur = "overvalued"; }
             else if (ig >= 13.1) { score = "3 – Slightly Optimistic"; kleur = "fair"; }
@@ -665,7 +659,6 @@ window.handleSignOut = async function() {
 
             const upside = ((intrinsic - price) / price * 100).toFixed(1);
 
-            // Resultaten weergeven
             document.getElementById('uitkomst').innerHTML = `
                 <div class="text-lg font-medium mb-2">${ticker} Intrinsic Value (Fair Price):</div>
                 <strong class="text-5xl font-extrabold">$${intrinsic.toFixed(2)}</strong><br>
@@ -674,7 +667,6 @@ window.handleSignOut = async function() {
                 <div class="mt-2 text-md text-gray-600 dark:text-gray-400">Implied 15-yr FCF Growth Rate: <strong>${ig.toFixed(1)}%</strong></div>
             `;
 
-            // Samenvattingstabel updaten
             document.getElementById('samenvatting').querySelector('tbody').innerHTML = `
                 <tr><td class="px-6 py-3">Ticker</td><td class="px-6 py-3 font-semibold">${ticker}</td></tr>
                 <tr><td class="px-6 py-3">Huidige koers</td><td class="px-6 py-3 font-semibold">$${price.toFixed(2)}</td></tr>
@@ -687,7 +679,6 @@ window.handleSignOut = async function() {
             `;
         }
 
-        // Live update bij elke verandering van de invoervelden
         const inputIds = ['ticker', 'prijs', 'fcf', 'growth', 'discount', 'terminal'];
         inputIds.forEach(id => {
             const element = document.getElementById(id);
@@ -698,7 +689,6 @@ window.handleSignOut = async function() {
             }
         });
 
-        // Start meteen bij het laden van de pagina
         window.bereken();
     </script>
 </body>
